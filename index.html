@@ -906,6 +906,7 @@ let schedEvents = JSON.parse(localStorage.getItem('sched_v4') || '[]');
 // categories: { name, color }
 let categories = JSON.parse(localStorage.getItem('cats_v4') || '[]');
 let currentFilter = 'all';
+let searchQuery = '';
 let currentSort = 'deadline';
 let selections = { priority:'med', dur:'short', think:'easy', recur:'' };
 let editSelections = { priority:'med', dur:'short', think:'easy', recur:'no' };
@@ -1857,7 +1858,6 @@ window.addEventListener('load', () => {
 });
 
 // ══ SEARCH ══════════════════════════════════════════
-let searchQuery = '';
 function onSearch(inp) {
   searchQuery = inp.value.trim();
   document.getElementById('search-bar').classList.toggle('has-text', !!searchQuery);
