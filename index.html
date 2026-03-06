@@ -491,6 +491,7 @@ body.dark::after { opacity:0.04; }
       <div class="stat"><strong id="stat-done">0</strong> הושלמו</div>
       <div class="stat"><strong id="stat-today">0</strong> להיום</div>
     </div>
+    <button onclick="openFocus()" style="background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;padding:8px 14px;color:white;font-family:'Heebo',sans-serif;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(74,155,111,0.3);white-space:nowrap;">🎯 פוקוס</button>
   </header>
   <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
 
@@ -1099,11 +1100,22 @@ function updateCatDatalist() {
 
 // ══ PAGE SWITCHING ══
 function switchPage(name) {
+  const current = document.querySelector('.page.active');
+  if (current) {
+    current.classList.add('page-exit');
+    setTimeout(() => current.classList.remove('page-exit'), 200);
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.getElementById('nav-'+name) && document.getElementById('nav-'+name).classList.add('active');
+  const next = document.getElementById('page-'+name);
+  if (next) { next.classList.add('page-enter'); setTimeout(()=>next.classList.remove('page-enter'),280); }
   if (name === 'schedule') renderSchedule();
+  if (name === 'today') renderToday();
+  if (name === 'stats') renderStats();
+  const fab = document.getElementById('fab-btn');
+  if (fab) fab.style.display = name === 'schedule' ? 'none' : 'flex';
 }
 
 // ══ TASK PAGE ══
@@ -1158,7 +1170,25 @@ function addTask() {
 
 function toggleDone(id) {
   const t = tasks.find(t=>t.id===id);
-  if (t) { t.done=!t.done; save(); renderTasks(); }
+  if (!t) return;
+  const wasDone = t.done;
+  t.done = !t.done;
+  save();
+  if (!wasDone) {
+    // Animate
+    const card = document.querySelector(`[data-id="${id}"]`);
+    if (card) {
+      const chk = card.querySelector('.task-check');
+      if (chk) { chk.classList.add('completing'); setTimeout(()=>chk.classList.remove('completing'),500); }
+      card.classList.add('completing');
+      setTimeout(()=>card.classList.remove('completing'),600);
+      const rect = card.getBoundingClientRect();
+      spawnParticles(rect.left + rect.width/2, rect.top + rect.height/2);
+    }
+    if (tasks.filter(t=>!t.done).length === 0) setTimeout(launchConfetti, 300);
+  }
+  renderTasks();
+  renderToday();
 }
 
 function deleteTask(id) {
@@ -1246,6 +1276,15 @@ function renderTasks() {
     if (currentFilter==='recur') return !!t.recurRule;
     return true;
   });
+  // Apply search
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      (t.cat||'').toLowerCase().includes(q) ||
+      (t.desc||'').toLowerCase().includes(q)
+    );
+  }
   filtered = sortedTasks(filtered);
 
   const done = tasks.filter(t=>t.done).length;
@@ -1259,6 +1298,7 @@ function renderTasks() {
     list.innerHTML = `<div class="empty-state"><div class="empty-icon">✦</div><div class="empty-title">אין משימות כאן</div></div>`; return;
   }
   list.innerHTML = filtered.map(t => renderCard(t)).join('');
+  attachSwipe(list);
   updateCatDatalist();
 }
 
@@ -1268,25 +1308,21 @@ function renderCard(t) {
   const tl={easy:'😌 קלילה',deep:'🧠 מחשבה'};
   const ov = !t.done && isOverdue(t.date);
 
-  // Category background
   const catColor = getCatColor(t.cat);
-  let cardStyle = '';
-  if (catColor) {
-    cardStyle = `background:${hexToRgba(catColor,0.18)};border-color:${hexToRgba(catColor,0.4)};`;
-  } else {
-    cardStyle = `background:var(--surface);`;
-  }
+  let cardStyle = catColor
+    ? `background:${hexToRgba(catColor,0.12)};border-color:${hexToRgba(catColor,0.35)};`
+    : `background:var(--surface);`;
 
   let tags = '';
   tags += `<span class="tag tag-priority-${t.priority}">${pl[t.priority]}</span>`;
   if (t.dur) tags += `<span class="tag tag-dur-${t.dur}">${dl[t.dur]}</span>`;
   if (t.think) tags += `<span class="tag tag-think-${t.think}">${tl[t.think]}</span>`;
   if (t.cat) {
-    const cc = catColor ? `style="background:${hexToRgba(catColor,0.3)};color:white;"` : '';
+    const cc = catColor ? `style="background:${hexToRgba(catColor,0.25)};color:var(--text);"` : '';
     tags += `<span class="tag tag-cat" ${cc}>#${esc(t.cat)}</span>`;
   }
   if (t.date) tags += `<span class="tag tag-date${ov?' overdue':''}">${ov?'⚠ ':'📅 '}${formatDate(t.date)}</span>`;
-  if (t.recurRule) tags += `<span class="tag tag-recur" title="${esc(recurRuleToString(t.recurRule))}">🔁 ${esc(recurRuleToString(t.recurRule))}</span>`;
+  if (t.recurRule) tags += `<span class="tag tag-recur">🔁 ${esc(recurRuleToString(t.recurRule))}</span>`;
   if (t.reminderTime) tags += `<span class="tag" style="background:#fff8e1;color:#e8a94a;">🔔 ${esc(t.reminderTime)}</span>`;
 
   const doneSubtasks = t.subtasks ? t.subtasks.filter(s=>s.done).length : 0;
@@ -1301,7 +1337,6 @@ function renderCard(t) {
       <button class="subtask-del" onclick="deleteSubtask(${t.id},${s.id})">✕</button>
     </li>`).join('');
 
-  const hasDetail = t.desc || totalSubtasks > 0;
   const expandBtn = `<button class="expand-btn" onclick="expandTask(${t.id})">${t.desc||totalSubtasks?'▾ פרטים':'▾ הוסיפי פרטים'}</button>`;
 
   return `<div class="task-card priority-${t.priority} ${t.done?'done':''}" data-id="${t.id}" draggable="true"
@@ -1324,6 +1359,7 @@ function renderCard(t) {
     </div>
     <div class="task-actions">
       <button class="action-btn" onclick="openEditModal(${t.id})" title="עריכה">✎</button>
+      <button class="action-btn" onclick="openSnooze(${t.id})" title="דחי">📅</button>
       <button class="action-btn del" onclick="deleteTask(${t.id})" title="מחק">✕</button>
     </div>
   </div>`;
@@ -2008,53 +2044,6 @@ function doSnooze(days) {
   save(); renderTasks(); renderToday();
 }
 
-// ══ PATCH switchPage for today + FAB ══
-const _origSwitchPage2 = switchPage;
-switchPage = function(name) {
-  _origSwitchPage2(name);
-  const fab=document.getElementById('fab-btn');
-  if(fab) fab.style.display = name==='schedule'?'none':'flex';
-  if(name==='today') renderToday();
-};
-
-// ══ PATCH renderTasks for search + swipe ══
-const _baseRT = renderTasks;
-renderTasks = function() {
-  if (searchQuery) {
-    const q=searchQuery.toLowerCase();
-    const orig=tasks.slice();
-    tasks = tasks.filter(t=>
-      t.title.toLowerCase().includes(q)||(t.cat||'').toLowerCase().includes(q)||(t.desc||'').toLowerCase().includes(q)
-    );
-    _baseRT();
-    tasks = orig;
-  } else { _baseRT(); }
-  const list=document.getElementById('task-list');
-  if(list) attachSwipe(list);
-};
-
-// ══ PATCH renderCard for snooze button ══
-const _baseRC = renderCard;
-renderCard = function(t) {
-  return _baseRC(t).replace(
-    `<button class="action-btn del" onclick="deleteTask(${t.id})" title="מחק">✕</button>`,
-    `<button class="action-btn" onclick="openSnooze(${t.id})" title="דחי">📅</button><button class="action-btn del" onclick="deleteTask(${t.id})" title="מחק">✕</button>`
-  );
-};
-
-// Focus button in tasks header
-setTimeout(()=>{
-  const hdr=document.querySelector('#page-tasks header');
-  if(hdr&&!hdr.querySelector('.focus-btn')){
-    const btn=document.createElement('button');
-    btn.className='focus-btn';
-    btn.setAttribute('onclick','openFocus()');
-    btn.style.cssText='background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;padding:8px 14px;color:white;font-family:Heebo,sans-serif;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(74,155,111,0.3);';
-    btn.textContent='🎯 פוקוס';
-    hdr.appendChild(btn);
-  }
-},100);
-
 // ══ סבב ב׳ — עיצוב ואנימציות ══════════════════════
 
 // ── Dark Mode ──
@@ -2129,59 +2118,6 @@ function spawnParticles(x, y) {
     setTimeout(() => p.remove(), 900);
   }
 }
-
-// ── Patch toggleDone for completion animation ──
-const _origToggleDone = toggleDone;
-toggleDone = function(id, event) {
-  const task = tasks.find(t => t.id === id);
-  const wasDone = task && task.done;
-  _origToggleDone(id);
-  if (!wasDone) {
-    // Animate check
-    const card = document.querySelector(`[data-id="${id}"]`);
-    if (card) {
-      const chk = card.querySelector('.task-check');
-      if (chk) { chk.classList.add('completing'); setTimeout(()=>chk.classList.remove('completing'),500); }
-      card.classList.add('completing');
-      setTimeout(()=>card.classList.remove('completing'),600);
-      const rect = card.getBoundingClientRect();
-      spawnParticles(rect.left + rect.width/2, rect.top + rect.height/2);
-    }
-    // Confetti if all done
-    const remaining = tasks.filter(t => !t.done).length;
-    if (remaining === 0) setTimeout(launchConfetti, 200);
-  }
-};
-
-// ── Page slide transitions ──
-const _origSwitchPage3 = switchPage;
-switchPage = function(name) {
-  const current = document.querySelector('.page.active');
-  if (current) {
-    current.classList.add('page-exit');
-    setTimeout(() => { current.classList.remove('page-exit'); }, 200);
-  }
-  _origSwitchPage3(name);
-  const next = document.getElementById('page-' + name);
-  if (next) {
-    next.classList.add('page-enter');
-    setTimeout(() => next.classList.remove('page-enter'), 280);
-  }
-  if (name === 'stats') renderStats();
-};
-
-// ── Category card color tints ──
-const _origRenderCard2 = renderCard;
-renderCard = function(t) {
-  let html = _origRenderCard2(t);
-  if (t.cat) {
-    const cat = categories.find(c => c.name === t.cat);
-    if (cat && cat.color) {
-      html = html.replace('class="task-card', `class="task-card" data-cat-color="${cat.color}" style="--cat-color:${cat.color}`);
-    }
-  }
-  return html;
-};
 
 // ── Stats Page ──
 function renderStats() {
