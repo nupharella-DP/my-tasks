@@ -1,4 +1,4 @@
-const CACHE = 'tasks-v1';
+const CACHE = 'tasks-v5';
 const ASSETS = [
   './index.html',
   './manifest.json',
