@@ -1986,34 +1986,28 @@ function attachSwipe(container) {
     let startX=0, startY=0, dx=0, moved=false;
     const id = parseInt(card.dataset.id);
 
-    // Wrap
-    if (!card.parentElement.classList.contains('swipe-wrap')) {
-      const wrap=document.createElement('div'); wrap.className='swipe-wrap';
-      const bgD=document.createElement('div'); bgD.className='swipe-bg swipe-bg-done';
-      bgD.innerHTML=`<span class="swipe-icon" data-swipe-done="${id}">✓</span>`;
-      const bgX=document.createElement('div'); bgX.className='swipe-bg swipe-bg-del';
-      bgX.innerHTML=`<span class="swipe-icon" data-swipe-del="${id}">🗑</span>`;
-      card.parentNode.insertBefore(wrap,card);
-      wrap.appendChild(bgD); wrap.appendChild(bgX); wrap.appendChild(card);
-    }
+    card.addEventListener('touchstart',e=>{
+      startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+      dx=0; moved=false;
+    },{passive:true});
 
-    card.addEventListener('touchstart',e=>{startX=e.touches[0].clientX;startY=e.touches[0].clientY;dx=0;moved=false;card.classList.add('swiping');},{passive:true});
     card.addEventListener('touchmove',e=>{
-      const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
-      if(!moved&&Math.abs(cy-startY)>Math.abs(cx-startX)){card.classList.remove('swiping');return;}
+      const cx=e.touches[0].clientX, cy=e.touches[0].clientY;
+      if(!moved && Math.abs(cy-startY) > Math.abs(cx-startX)) return;
       moved=true; dx=cx-startX;
       card.style.transform=`translateX(${dx}px)`;
-      const di=container.querySelector(`[data-swipe-done="${id}"]`);
-      const xi=container.querySelector(`[data-swipe-del="${id}"]`);
-      if(di)di.classList.toggle('show',dx<-50);
-      if(xi)xi.classList.toggle('show',dx>50);
+      // Visual hint
+      if (dx < -50) card.style.background='rgba(74,155,111,0.15)';
+      else if (dx > 50) card.style.background='rgba(224,112,112,0.15)';
+      else card.style.background='';
     },{passive:true});
+
     card.addEventListener('touchend',()=>{
-      card.classList.remove('swiping'); card.classList.add('snap-back');
-      if(dx<-80){toggleDone(id);return;}
-      if(dx>80){deleteTask(id);return;}
       card.style.transform='';
-      setTimeout(()=>card.classList.remove('snap-back'),300);
+      card.style.background='';
+      if (!moved) return;
+      if (dx < -80) { toggleDone(id); return; }
+      if (dx > 80) { deleteTask(id); return; }
     });
   });
 }
