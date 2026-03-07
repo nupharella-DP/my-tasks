@@ -915,23 +915,23 @@ const fbApp = firebase.initializeApp({
 const db = firebase.firestore();
 const DATA_DOC = db.collection('app').doc('data');
 
-let ignoreNextSnapshot = false;
+let ignoreSnapshots = 0;
 
 async function saveToFirebase() {
   try {
-    ignoreNextSnapshot = true;
+    ignoreSnapshots++;
     await DATA_DOC.set({
       tasks: JSON.stringify(tasks),
       schedEvents: JSON.stringify(schedEvents),
       categories: JSON.stringify(categories),
       updatedAt: Date.now()
     });
-  } catch(e) { console.warn('Firebase save error:', e); }
+  } catch(e) { console.warn('Firebase save error:', e); ignoreSnapshots = Math.max(0, ignoreSnapshots-1); }
 }
 
 DATA_DOC.onSnapshot((snap) => {
   if (!snap.exists) return;
-  if (ignoreNextSnapshot) { ignoreNextSnapshot = false; return; }
+  if (ignoreSnapshots > 0) { ignoreSnapshots--; return; }
   const d = snap.data();
   try {
     tasks = JSON.parse(d.tasks || '[]');
