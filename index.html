@@ -491,6 +491,7 @@ body.dark::after { opacity:0.04; }
       <div class="stat"><strong id="stat-done">0</strong> הושלמו</div>
       <div class="stat"><strong id="stat-today">0</strong> להיום</div>
     </div>
+    <span id="sync-indicator" style="font-size:11px;color:var(--accent);opacity:0;transition:opacity 0.5s;white-space:nowrap;">☁ מסונכרן</span>
     <button onclick="openFocus()" style="background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;padding:8px 14px;color:white;font-family:'Heebo',sans-serif;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(74,155,111,0.3);white-space:nowrap;">🎯 פוקוס</button>
   </header>
   <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
@@ -899,7 +900,61 @@ body.dark::after { opacity:0.04; }
   </button>
 </nav>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
+// ══ FIREBASE ══
+const fbApp = firebase.initializeApp({
+  apiKey: "AIzaSyDSGZkkUItM0mPL93nguV1VAry2Rm_y1as",
+  authDomain: "tasks-1e238.firebaseapp.com",
+  projectId: "tasks-1e238",
+  storageBucket: "tasks-1e238.firebasestorage.app",
+  messagingSenderId: "929228608066",
+  appId: "1:929228608066:web:0a64c681b2ee38dc3a13db"
+});
+const db = firebase.firestore();
+const DATA_DOC = db.collection('app').doc('data');
+
+let ignoreNextSnapshot = false;
+
+async function saveToFirebase() {
+  try {
+    ignoreNextSnapshot = true;
+    await DATA_DOC.set({
+      tasks: JSON.stringify(tasks),
+      schedEvents: JSON.stringify(schedEvents),
+      categories: JSON.stringify(categories),
+      updatedAt: Date.now()
+    });
+  } catch(e) { console.warn('Firebase save error:', e); }
+}
+
+DATA_DOC.onSnapshot((snap) => {
+  if (!snap.exists) return;
+  if (ignoreNextSnapshot) { ignoreNextSnapshot = false; return; }
+  const d = snap.data();
+  try {
+    tasks = JSON.parse(d.tasks || '[]');
+    schedEvents = JSON.parse(d.schedEvents || '[]');
+    categories = JSON.parse(d.categories || '[]');
+    localStorage.setItem('tasks_v4', d.tasks || '[]');
+    localStorage.setItem('sched_v4', d.schedEvents || '[]');
+    localStorage.setItem('cats_v4', d.categories || '[]');
+    renderTasks();
+    renderToday();
+    updateCatDatalist();
+    showSyncIndicator();
+  } catch(e) { console.warn('Firebase load error:', e); }
+});
+
+function showSyncIndicator() {
+  const el = document.getElementById('sync-indicator');
+  if (!el) return;
+  el.textContent = '☁ מסונכרן';
+  el.style.opacity = '1';
+  setTimeout(() => el.style.opacity = '0', 2000);
+}
+
 // ══ STATE ══
 let tasks = JSON.parse(localStorage.getItem('tasks_v4') || '[]');
 let schedEvents = JSON.parse(localStorage.getItem('sched_v4') || '[]');
@@ -926,6 +981,7 @@ function save() {
   localStorage.setItem('tasks_v4', JSON.stringify(tasks));
   localStorage.setItem('sched_v4', JSON.stringify(schedEvents));
   localStorage.setItem('cats_v4', JSON.stringify(categories));
+  saveToFirebase();
 }
 
 // ══ RECURRENCE ══
