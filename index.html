@@ -982,6 +982,7 @@ function save() {
   localStorage.setItem('sched_v4', JSON.stringify(schedEvents));
   localStorage.setItem('cats_v4', JSON.stringify(categories));
   saveToFirebase();
+  if (typeof scheduleAllNotifications === 'function') scheduleAllNotifications();
 }
 
 // ══ RECURRENCE ══
@@ -1895,17 +1896,7 @@ async function toggleNotifications() {
   }
 }
 
-// Add reminder fields to addTask and saveEdit
-// ── patch addTask to save reminderTime ──
-const _origAddTask = addTask;
-// (handled inline below by redefining save-task logic)
-
-// Reschedule whenever tasks or schedule changes
-const _origSave = save;
-save = function() {
-  _origSave();
-  scheduleAllNotifications();
-};
+// Reschedule whenever tasks or schedule changes - handled inside save() directly
 
 // ── Init notifications on load ──
 window.addEventListener('load', () => {
