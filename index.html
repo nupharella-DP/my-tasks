@@ -903,6 +903,29 @@ body.dark::after { opacity:0.04; }
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
+// ══ STATE ══
+let tasks = JSON.parse(localStorage.getItem('tasks_v4') || '[]');
+let schedEvents = JSON.parse(localStorage.getItem('sched_v4') || '[]');
+let categories = JSON.parse(localStorage.getItem('cats_v4') || '[]');
+let currentFilter = 'all';
+let searchQuery = '';
+let currentSort = 'deadline';
+let notifPermission = 'default';
+let notifTimers = [];
+let selections = { priority:'med', dur:'short', think:'easy', recur:'' };
+let editSelections = { priority:'med', dur:'short', think:'easy', recur:'no' };
+let weekOffset = 0;
+let selectedCatForColor = null;
+
+const HOURS_START = 7, HOURS_END = 22, HOUR_H = 60;
+
+const CAT_PALETTE = [
+  '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63',
+  '#ff5722','#ff9800','#cddc39','#4caf50','#009688','#2196f3','#673ab7','#f06292',
+  '#a1887f','#78909c','#26c6da','#66bb6a','#ffa726','#ab47bc','#42a5f5','#ef5350',
+  '#8d6e63','#546e7a','#00bcd4','#8bc34a','#ff7043','#7e57c2','#29b6f6','#ec407a',
+];
+
 // ══ FIREBASE ══
 const fbApp = firebase.initializeApp({
   apiKey: "AIzaSyDSGZkkUItM0mPL93nguV1VAry2Rm_y1as",
@@ -915,24 +938,26 @@ const fbApp = firebase.initializeApp({
 const db = firebase.firestore();
 const DATA_DOC = db.collection('app').doc('data');
 
-let ignoreSnapshots = 0;
+let lastSavedAt = 0;
 
 async function saveToFirebase() {
+  const ts = Date.now();
+  lastSavedAt = ts;
   try {
-    ignoreSnapshots++;
     await DATA_DOC.set({
       tasks: JSON.stringify(tasks),
       schedEvents: JSON.stringify(schedEvents),
       categories: JSON.stringify(categories),
-      updatedAt: Date.now()
+      updatedAt: ts
     });
-  } catch(e) { console.warn('Firebase save error:', e); ignoreSnapshots = Math.max(0, ignoreSnapshots-1); }
+  } catch(e) { console.warn('Firebase save error:', e); }
 }
 
 DATA_DOC.onSnapshot((snap) => {
   if (!snap.exists) return;
-  if (ignoreSnapshots > 0) { ignoreSnapshots--; return; }
   const d = snap.data();
+  // Ignore snapshots that are older than our last local save
+  if ((d.updatedAt || 0) <= lastSavedAt) return;
   try {
     tasks = JSON.parse(d.tasks || '[]');
     schedEvents = JSON.parse(d.schedEvents || '[]');
@@ -954,28 +979,6 @@ function showSyncIndicator() {
   el.style.opacity = '1';
   setTimeout(() => el.style.opacity = '0', 2000);
 }
-
-// ══ STATE ══
-let tasks = JSON.parse(localStorage.getItem('tasks_v4') || '[]');
-let schedEvents = JSON.parse(localStorage.getItem('sched_v4') || '[]');
-// categories: { name, color }
-let categories = JSON.parse(localStorage.getItem('cats_v4') || '[]');
-let currentFilter = 'all';
-let searchQuery = '';
-let currentSort = 'deadline';
-let selections = { priority:'med', dur:'short', think:'easy', recur:'' };
-let editSelections = { priority:'med', dur:'short', think:'easy', recur:'no' };
-let weekOffset = 0;
-let selectedCatForColor = null;
-
-const HOURS_START = 7, HOURS_END = 22, HOUR_H = 60;
-
-const CAT_PALETTE = [
-  '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63',
-  '#ff5722','#ff9800','#cddc39','#4caf50','#009688','#2196f3','#673ab7','#f06292',
-  '#a1887f','#78909c','#26c6da','#66bb6a','#ffa726','#ab47bc','#42a5f5','#ef5350',
-  '#8d6e63','#546e7a','#00bcd4','#8bc34a','#ff7043','#7e57c2','#29b6f6','#ec407a',
-];
 
 function save() {
   localStorage.setItem('tasks_v4', JSON.stringify(tasks));
@@ -1721,8 +1724,6 @@ updateCatDatalist();
 renderTasks();
 
 // ══ NOTIFICATIONS ══════════════════════════════════════════
-let notifPermission = Notification.permission;
-let notifTimers = [];
 
 async function requestNotifPermission() {
   if (!('Notification' in window)) return false;
@@ -1900,7 +1901,7 @@ async function toggleNotifications() {
 
 // ── Init notifications on load ──
 window.addEventListener('load', () => {
-  notifPermission = Notification.permission;
+  if ('Notification' in window) notifPermission = Notification.permission;
   if (notifPermission === 'granted') scheduleAllNotifications();
 });
 
