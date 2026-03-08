@@ -200,12 +200,12 @@ textarea.form-input { resize:vertical; min-height:54px; }
 .sched-layout { display:flex; gap:14px; align-items:flex-start; }
 .unscheduled-panel { width:170px; flex-shrink:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px; position:sticky; top:16px; box-shadow:var(--shadow); }
 .panel-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:10px; }
-.week-grid-wrap { flex:1; min-width:0; display:flex; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow); overflow:visible; }
+.week-grid-wrap { display:flex; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow); overflow:hidden; }
 .time-col { width:42px; flex-shrink:0; border-left:1px solid var(--border); position:sticky; right:0; background:var(--surface); z-index:10; }
 .time-col-header { height:40px; border-bottom:1px solid var(--border); }
 .time-slot-label { height:48px; display:flex; align-items:flex-start; justify-content:center; padding-top:4px; font-size:10px; color:var(--text-muted); font-weight:500; border-bottom:1px solid var(--border); }
-.days-scroll { flex:1; display:grid; grid-template-columns:repeat(7,1fr); min-width:0; }
-.day-col { min-width:0; border-left:1px solid var(--border); position:relative; }
+.days-scroll { display:flex; flex:1; overflow-x:auto; -webkit-overflow-scrolling:touch; scroll-snap-type:x mandatory; }
+.day-col { flex:0 0 calc(33vw - 14px); min-width:80px; border-left:1px solid var(--border); position:relative; scroll-snap-align:start; }
 .day-col:last-child { border-left:none; }
 .day-header { height:40px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-bottom:1px solid var(--border); background:var(--surface); }
 .day-name { font-size:10px; color:var(--text-muted); font-weight:600; text-transform:uppercase; }
@@ -585,13 +585,19 @@ body::after {
           </div>
     </div>
   </div>
+  <!-- Day scroll nav -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 12px;background:var(--surface2);border-bottom:1px solid var(--border)">
+    <button onclick="scrollDays(-1)" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px 12px;font-size:16px;cursor:pointer;color:var(--text)">›</button>
+    <div id="day-dots" style="display:flex;gap:5px;align-items:center"></div>
+    <button onclick="scrollDays(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px 12px;font-size:16px;cursor:pointer;color:var(--text)">‹</button>
+  </div>
   <div class="sched-layout">
     <div class="unscheduled-panel">
       <div class="panel-title">לשיבוץ</div>
       <div id="unsched-list"></div>
       <div id="unsched-empty" style="font-size:11px;color:var(--text-muted);display:none">הכל שובץ 🎉</div>
     </div>
-    <div style="flex:1;min-width:0;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch">
+    <div style="flex:1;min-width:0;overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:calc(100vh - 180px)">
       <div class="week-grid-wrap" id="week-grid">
         <div class="time-col">
           <div class="time-col-header"></div>
@@ -1603,6 +1609,29 @@ function saveEdit() {
   save(); updateCatDatalist(); closeEditModal(); renderTasks();
 }
 
+
+// ══ DAY SCROLL NAV ══
+function scrollDays(dir) {
+  const ds = document.getElementById('days-scroll');
+  if (!ds) return;
+  const colW = ds.querySelector('.day-col') ? ds.querySelector('.day-col').offsetWidth : 100;
+  ds.scrollBy({ left: dir * colW * 3, behavior: 'smooth' });
+  setTimeout(updateDayDots, 350);
+}
+
+function updateDayDots() {
+  const ds = document.getElementById('days-scroll');
+  const dots = document.getElementById('day-dots');
+  if (!ds || !dots) return;
+  const colW = ds.querySelector('.day-col') ? ds.querySelector('.day-col').offsetWidth : 100;
+  const total = 7;
+  const pages = Math.ceil(total / 3);
+  const currentPage = Math.round(ds.scrollLeft / (colW * 3));
+  dots.innerHTML = Array.from({length: pages}, (_,i) =>
+    `<div style="width:${i===currentPage?'18px':'6px'};height:6px;border-radius:3px;background:${i===currentPage?'var(--accent)':'var(--border)'};transition:all 0.2s"></div>`
+  ).join('');
+}
+
 // ══ BLOCKED SLOTS ══
 let selectedBlColor = '#a0b8e8';
 
@@ -1861,6 +1890,21 @@ function renderSchedule() {
   }
 
   renderUnscheduled();
+  // Scroll to today (day index 0 = Sunday, today visible by default at start)
+  setTimeout(() => {
+    const ds = document.getElementById('days-scroll');
+    // Find today's column index
+    const todayStr = new Date().toISOString().split('T')[0];
+    const cols = ds ? ds.querySelectorAll('.day-col') : [];
+    let todayIdx = 0;
+    cols.forEach((col, i) => { if (col.classList.contains('today')) todayIdx = i; });
+    if (ds && todayIdx > 0) {
+      const colW = cols[0] ? cols[0].offsetWidth : 100;
+      ds.scrollLeft = colW * Math.max(0, todayIdx - 1);
+    }
+    updateDayDots();
+    if (ds) ds.addEventListener('scroll', updateDayDots, { passive: true });
+  }, 50);
 }
 
 function renderUnscheduled() {
