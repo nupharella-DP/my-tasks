@@ -200,20 +200,20 @@ textarea.form-input { resize:vertical; min-height:54px; }
 .sched-layout { display:flex; gap:14px; align-items:flex-start; }
 .unscheduled-panel { width:170px; flex-shrink:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px; position:sticky; top:16px; box-shadow:var(--shadow); }
 .panel-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:10px; }
-.week-grid-wrap { flex:1; min-width:0; display:flex; overflow-x:auto; overflow-y:hidden; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); min-height:600px; box-shadow:var(--shadow); -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; }
+.week-grid-wrap { flex:1; min-width:0; display:flex; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow); overflow:visible; }
 .time-col { width:42px; flex-shrink:0; border-left:1px solid var(--border); position:sticky; right:0; background:var(--surface); z-index:10; }
-.time-col-header { height:48px; border-bottom:1px solid var(--border); }
-.time-slot-label { height:60px; display:flex; align-items:flex-start; justify-content:center; padding-top:4px; font-size:10px; color:var(--text-muted); font-weight:500; border-bottom:1px solid var(--border); }
-.days-scroll { flex:1; display:flex; overflow-x:auto; min-width:0; }
-.day-col { flex:0 0 120px; min-width:120px; border-left:1px solid var(--border); position:relative; scroll-snap-align:start; }
+.time-col-header { height:40px; border-bottom:1px solid var(--border); }
+.time-slot-label { height:48px; display:flex; align-items:flex-start; justify-content:center; padding-top:4px; font-size:10px; color:var(--text-muted); font-weight:500; border-bottom:1px solid var(--border); }
+.days-scroll { flex:1; display:grid; grid-template-columns:repeat(7,1fr); min-width:0; }
+.day-col { min-width:0; border-left:1px solid var(--border); position:relative; }
 .day-col:last-child { border-left:none; }
-.day-header { height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-bottom:1px solid var(--border); background:var(--surface); }
+.day-header { height:40px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-bottom:1px solid var(--border); background:var(--surface); }
 .day-name { font-size:10px; color:var(--text-muted); font-weight:600; text-transform:uppercase; }
 .day-num { font-size:17px; font-weight:700; line-height:1.2; color:var(--text); }
 .day-col.today .day-num { color:var(--accent); }
 .day-col.today .day-header { background:var(--accent-light); }
 .day-slots { position:relative; }
-.hour-row { height:60px; border-bottom:1px solid var(--border); position:relative; transition:background 0.12s; }
+.hour-row { height:48px; border-bottom:1px solid var(--border); position:relative; transition:background 0.12s; }
 .hour-row::after { content:''; position:absolute; left:0; right:0; top:50%; border-top:1px dashed var(--border); pointer-events:none; }
 .hour-row.drag-over { background:rgba(74,155,111,0.08); }
 .sched-block { position:absolute; left:3px; right:3px; border-radius:8px; padding:4px 7px; font-size:11px; font-weight:600; cursor:grab; overflow:hidden; z-index:2; transition:transform 0.1s; display:flex; flex-direction:column; gap:1px; user-select:none; }
@@ -557,6 +557,9 @@ body::after {
     <div class="filter-chip" data-filter="short" onclick="setFilter(this)">⚡ קצרות</div>
     <div class="filter-chip" data-filter="deep" onclick="setFilter(this)">🧠 מחשבה</div>
     <div class="filter-chip" data-filter="recur" onclick="setFilter(this)">🔁 חזרתיות</div>
+    <div class="filter-chip" data-filter="computer" onclick="setFilter(this)">💻 מחשב</div>
+    <div class="filter-chip" data-filter="phone" onclick="setFilter(this)">📞 טלפון</div>
+    <div class="filter-chip" data-filter="outside" onclick="setFilter(this)">🚶 מחוץ</div>
   </div>
 
   <div class="sort-row">
@@ -588,7 +591,7 @@ body::after {
       <div id="unsched-list"></div>
       <div id="unsched-empty" style="font-size:11px;color:var(--text-muted);display:none">הכל שובץ 🎉</div>
     </div>
-    <div style="flex:1;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <div style="flex:1;min-width:0;overflow-y:auto;max-height:calc(100vh - 160px);-webkit-overflow-scrolling:touch">
       <div class="week-grid-wrap" id="week-grid">
         <div class="time-col">
           <div class="time-col-header"></div>
@@ -1009,7 +1012,7 @@ let editSelections = { priority:'med', dur:'short', think:'easy', recur:'no' };
 let weekOffset = 0;
 let selectedCatForColor = null;
 
-const HOURS_START = 7, HOURS_END = 22, HOUR_H = 60;
+const HOURS_START = 7, HOURS_END = 22, HOUR_H = 48;
 
 const CAT_PALETTE = [
   '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63',
@@ -1441,6 +1444,7 @@ function renderTasks() {
     if (currentFilter==='short') return t.dur==='short' && !t.done;
     if (currentFilter==='deep') return t.think==='deep' && !t.done;
     if (currentFilter==='recur') return !!t.recurRule;
+    if (['computer','phone','outside'].includes(currentFilter)) return Array.isArray(t.loc) && t.loc.includes(currentFilter);
     return true;
   });
   // Apply search
